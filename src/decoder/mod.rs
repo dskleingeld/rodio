@@ -8,7 +8,7 @@ use std::io::SeekFrom;
 use std::mem;
 use std::time::Duration;
 
-use crate::Source;
+use crate::{Source, SourceExt};
 
 #[cfg(feature = "flac")]
 mod flac;
@@ -237,6 +237,26 @@ where
             DecoderImpl::Mp3(ref source) => source.total_duration(),
             DecoderImpl::None(_) => Some(Duration::default()),
         }
+    }
+}
+
+impl<R> SourceExt for Decoder<R>
+where
+    R: Read + Seek,
+{
+    fn request_pos(&self, pos: f32) -> bool {
+        match self.0 {
+            #[cfg(feature = "wav")]
+            DecoderImpl::Wav(ref source) => false,
+            #[cfg(feature = "vorbis")]
+            DecoderImpl::Vorbis(ref source) => false,
+            #[cfg(feature = "flac")]
+            DecoderImpl::Flac(ref source) => false,
+            #[cfg(feature = "mp3")]
+            DecoderImpl::Mp3(ref source) => source.request_pos(pos),
+            DecoderImpl::None(_) => false,
+        };
+        todo!();
     }
 }
 

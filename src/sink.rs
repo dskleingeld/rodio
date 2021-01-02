@@ -9,7 +9,7 @@ use std::time::Duration;
 use crate::queue;
 use crate::source::Done;
 use crate::Sample;
-use crate::Source;
+use crate::{Source, SourceExt};
 
 /// Handle to an device that outputs sounds.
 ///
@@ -29,6 +29,7 @@ struct Controls {
     pause: AtomicBool,
     volume: Mutex<f32>,
     stopped: AtomicBool,
+    set_pos: Mutex<Option<f32>>,
 }
 
 impl Sink {
@@ -52,6 +53,7 @@ impl Sink {
                 pause: AtomicBool::new(false),
                 volume: Mutex::new(1.0),
                 stopped: AtomicBool::new(false),
+                set_pos: Mutex::new(None),
             }),
             sound_count: Arc::new(AtomicUsize::new(0)),
             detached: false,
@@ -89,6 +91,43 @@ impl Sink {
         *self.sleep_until_end.lock().unwrap() = Some(self.queue_tx.append_with_signal(source));
     }
 
+    /// Appends a sound to the queue of sounds to play.
+    #[inline]
+    pub fn append_seekable<S>(&self, source: S)
+    where
+        S: Source + Send + 'static,
+        S: SourceExt + Send + 'static,
+        S::Item: Sample,
+        S::Item: Send,
+    {
+        let controls = self.controls.clone();
+
+        let source = source
+            .pausable(false)
+            .amplify(1.0)
+            .stoppable()
+            .periodic_access(Duration::from_millis(5), move |src| {
+                if controls.stopped.load(Ordering::SeqCst) {
+                    src.stop();
+                } else {
+                    src.inner_mut().set_factor(*controls.volume.lock().unwrap());
+                    src.inner_mut()
+                        .inner_mut()
+                        .set_paused(controls.pause.load(Ordering::SeqCst));
+                    if let Some(pos) = controls.set_pos.lock().unwrap().take() {
+                        src.inner_mut()
+                            .inner_mut()
+                            .inner_mut()
+                            .request_pos(pos);
+                    }
+                }
+            })
+            .convert_samples();
+        self.sound_count.fetch_add(1, Ordering::Relaxed);
+        let source = Done::new(source, self.sound_count.clone());
+        *self.sleep_until_end.lock().unwrap() = Some(self.queue_tx.append_with_signal(source));
+    }
+
     /// Gets the volume of the sound.
     ///
     /// The value `1.0` is the "normal" volume (unfiltered input). Any value other than 1.0 will
@@ -113,6 +152,13 @@ impl Sink {
     #[inline]
     pub fn play(&self) {
         self.controls.pause.store(false, Ordering::SeqCst);
+    }
+
+    /// Set position
+    ///
+    /// No effect if source does not implement `SourceExt`
+    pub fn set_pos(&self, pos: f32) {
+        *self.controls.set_pos.lock().unwrap() = Some(pos);
     }
 
     /// Pauses playback of this sink.
