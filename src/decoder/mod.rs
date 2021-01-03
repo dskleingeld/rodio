@@ -8,7 +8,9 @@ use std::io::SeekFrom;
 use std::mem;
 use std::time::Duration;
 
-use crate::{Source, SourceExt};
+use crate::Source;
+use crate::SourceExt;
+use crate::TestTitle;
 
 #[cfg(feature = "flac")]
 mod flac;
@@ -253,7 +255,7 @@ where
             #[cfg(feature = "flac")]
             DecoderImpl::Flac(ref source) => false,
             #[cfg(feature = "mp3")]
-            DecoderImpl::Mp3(ref source) => source.request_pos(pos),
+            DecoderImpl::Mp3(ref source) => {(*source).test(); false},
             DecoderImpl::None(_) => false,
         };
         todo!();
