@@ -10,7 +10,6 @@ use std::time::Duration;
 
 use crate::Source;
 use crate::SourceExt;
-use crate::TestTitle;
 
 #[cfg(feature = "flac")]
 mod flac;
@@ -242,8 +241,8 @@ where
     }
 }
 
-impl<R> SourceExt for Decoder<R>
-where
+impl<R> Decoder<R>
+where 
     R: Read + Seek,
 {
     fn request_pos(&self, pos: f32) -> bool {
@@ -255,12 +254,31 @@ where
             #[cfg(feature = "flac")]
             DecoderImpl::Flac(ref source) => false,
             #[cfg(feature = "mp3")]
-            DecoderImpl::Mp3(ref source) => {(*source).test(); false},
+            DecoderImpl::Mp3(ref source) => source.request_pos(pos),
             DecoderImpl::None(_) => false,
-        };
-        todo!();
+        }
     }
 }
+
+// impl<R> SourceExt for Decoder<R>
+// where
+//     R: Read + Seek,
+// {
+//     fn request_pos(&self, pos: f32) -> bool {
+//         match self.0 {
+//             #[cfg(feature = "wav")]
+//             DecoderImpl::Wav(ref source) => false,
+//             #[cfg(feature = "vorbis")]
+//             DecoderImpl::Vorbis(ref source) => false,
+//             #[cfg(feature = "flac")]
+//             DecoderImpl::Flac(ref source) => false,
+//             #[cfg(feature = "mp3")]
+//             DecoderImpl::Mp3(ref source) => {source.test(); false},
+//             DecoderImpl::None(_) => false,
+//         };
+//         todo!();
+//     }
+// }
 
 impl<R> Iterator for LoopedDecoder<R>
 where
